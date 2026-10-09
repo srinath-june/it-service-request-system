@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Service Request Management System</title>
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Custom Modern CSS -->
+  <link rel="stylesheet" href="/static/css/style.css">
+  <!-- Chart.js (Optional CDN with built-in fallback) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Left Sidebar Navigation -->
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="bg-primary text-white rounded p-2 d-flex align-items-center justify-content-center" style="width:38px; height:38px;">
+        <i class="fa-solid fa-headset fs-5"></i>
+      </div>
+      <div>
+        <h6 class="mb-0 fw-bold">IT Service Desk</h6>
+        <small class="text-muted" style="font-size:0.75rem;">Enterprise Portal</small>
+      </div>
+    </div>
+
+    <div class="sidebar-nav">
+      <a class="nav-link-item active" id="nav-dashboard" onclick="switchView('dashboard')">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Dashboard</span>
+      </a>
+      <a class="nav-link-item" id="nav-tickets" onclick="switchView('tickets')">
+        <i class="fa-solid fa-list-check"></i>
+        <span>Service Requests</span>
+      </a>
+      <a class="nav-link-item" id="nav-create" onclick="openCreateModal()">
+        <i class="fa-solid fa-plus-circle text-success"></i>
+        <span>Raise Request</span>
+      </a>
+      <a class="nav-link-item" id="nav-sla" onclick="switchView('sla-config')">
+        <i class="fa-solid fa-sliders"></i>
+        <span>SLA Config</span>
+      </a>
+      <a class="nav-link-item" href="/docs" target="_blank">
+        <i class="fa-solid fa-book text-info"></i>
+        <span>Swagger API Docs</span>
+      </a>
+    </div>
+
+    <div class="p-3 border-top bg-light mt-auto">
+      <div class="d-flex align-items-center gap-2">
+        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style="width:34px; height:34px; font-size:0.85rem;">
+          MV
+        </div>
+        <div>
+          <div class="small fw-bold" id="current-user-name">Marcus Vance</div>
+          <div class="text-muted" style="font-size:0.75rem;">IT Manager (Admin)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="main-content">
+    
+    <!-- Top Bar -->
+    <div class="top-header">
+      <div>
+        <h3 class="fw-bold mb-1" id="view-title">Management Dashboard</h3>
+        <p class="text-muted small mb-0" id="view-subtitle">Real-time service desk metrics, SLA monitoring, and team workload.</p>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary btn-sm" onclick="refreshCurrentView()">
+          <i class="fa-solid fa-rotate me-1"></i> Refresh Data
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="openCreateModal()">
+          <i class="fa-solid fa-plus me-1"></i> Raise Request
+        </button>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 1: MANAGEMENT DASHBOARD & METRICS -->
+    <!-- ============================================================== -->
+    <div id="view-dashboard">
+      <!-- 4 Top KPI Cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>Open Requests</span>
+              <i class="fa-solid fa-inbox text-primary fs-5"></i>
+            </div>
+            <div class="metric-value text-primary" id="stat-total-open">0</div>
+            <div class="text-muted small"><strong id="stat-unassigned">0</strong> unassigned tickets</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>SLA Breached (Open)</span>
+              <i class="fa-solid fa-triangle-exclamation text-danger fs-5"></i>
+            </div>
+            <div class="metric-value text-danger" id="stat-sla-breached">0</div>
+            <div class="text-danger small"><strong id="stat-approaching">0</strong> approaching breach (&ge;75%)</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>Critical & High</span>
+              <i class="fa-solid fa-fire text-warning fs-5"></i>
+            </div>
+            <div class="metric-value text-warning" id="stat-critical-high">0</div>
+            <div class="text-muted small"><span id="stat-critical">0</span> Critical, <span id="stat-high">0</span> High</div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="metric-card">
+            <div class="metric-header">
+              <span>SLA Compliance</span>
+              <i class="fa-solid fa-shield-check text-success fs-5"></i>
+            </div>
+            <div class="metric-value text-success" id="stat-compliance-rate">100%</div>
+            <div class="text-muted small"><span id="stat-total-resolved">0</span> resolved / closed in SLA</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts & Visual Distribution Row -->
+      <div class="row g-3 mb-4">
+        <!-- Priority Card -->
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm p-4 h-100">
+            <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+              <i class="fa-solid fa-layer-group text-primary"></i> Requests by Priority
+            </h6>
+            <div id="chartPriorityContainer" style="min-height: 200px; position: relative;">
+              <canvas id="chartPriority"></canvas>
+            </div>
+            <div id="fallbackPriorityList" class="stat-bar-container" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Category Card -->
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm p-4 h-100">
+            <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+              <i class="fa-solid fa-folder-tree text-info"></i> Requests by Category
+            </h6>
+            <div id="chartCategoryContainer" style="min-height: 200px; position: relative;">
+              <canvas id="chartCategory"></canvas>
+            </div>
+            <div id="fallbackCategoryList" class="stat-bar-container" style="display:none;"></div>
+          </div>
+        </div>
+
+        <!-- Status Card -->
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm p-4 h-100">
+            <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+              <i class="fa-solid fa-arrows-spin text-success"></i> Requests by Status
+            </h6>
+            <div id="chartStatusContainer" style="min-height: 200px; position: relative;">
+              <canvas id="chartStatus"></canvas>
+            </div>
+            <div id="fallbackStatusList" class="stat-bar-container" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IT Staff Workload Table -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+          <h6 class="fw-bold mb-0"><i class="fa-solid fa-user-gear text-primary me-2"></i>IT Team Member Workload & Capacity</h6>
+          <span class="badge bg-light text-muted">Active Operators</span>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th>Team Member</th>
+                <th class="text-center">Open / Active Tickets</th>
+                <th class="text-center">Resolved Tickets</th>
+                <th class="text-center">SLA Breached</th>
+                <th class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="assignee-workload-tbody">
+              <!-- Loaded dynamically via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 2: SERVICE REQUESTS QUEUE & TABLE -->
+    <!-- ============================================================== -->
+    <div id="view-tickets" style="display:none;">
+      <!-- Search & Filters Toolbar -->
+      <div class="card border-0 shadow-sm p-3 mb-3">
+        <div class="row g-2 align-items-center">
+          <div class="col-md-3">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-white"><i class="fa-solid fa-magnifying-glass text-muted"></i></span>
+              <input type="text" id="filter-search" class="form-control" placeholder="Search ticket # or subject..." oninput="handleFilterChange()">
+            </div>
+          </div>
+          <div class="col-md-2">
+            <select id="filter-status" class="form-select form-select-sm" onchange="handleFilterChange()">
+              <option value="">All Statuses</option>
+              <option value="NEW">New</option>
+              <option value="ASSIGNED">Assigned</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="ON_HOLD">On Hold</option>
+              <option value="RESOLVED">Resolved</option>
+              <option value="CLOSED">Closed</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <select id="filter-priority" class="form-select form-select-sm" onchange="handleFilterChange()">
+              <option value="">All Priorities</option>
+              <option value="CRITICAL">Critical (4h SLA)</option>
+              <option value="HIGH">High (8h SLA)</option>
+              <option value="MEDIUM">Medium (24h SLA)</option>
+              <option value="LOW">Low (48h SLA)</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <select id="filter-category" class="form-select form-select-sm" onchange="handleFilterChange()">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <select id="filter-assignee" class="form-select form-select-sm" onchange="handleFilterChange()">
+              <option value="">All Assignees</option>
+              <option value="unassigned">Unassigned Only</option>
+            </select>
+          </div>
+          <div class="col-md-1 d-flex gap-1">
+            <button class="btn btn-outline-danger btn-sm w-100" id="btn-breached-filter" title="Toggle SLA Breached" onclick="toggleBreachedFilter()">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </button>
+            <button class="btn btn-light btn-sm" title="Reset Filters" onclick="resetFilters()">
+              <i class="fa-solid fa-filter-circle-xmark"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tickets Data Table -->
+      <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+          <table class="custom-table">
+            <thead>
+              <tr>
+                <th style="width: 120px;">Ticket #</th>
+                <th>Subject & Category</th>
+                <th style="width: 100px;">Priority</th>
+                <th style="width: 110px;">Status</th>
+                <th>Requester</th>
+                <th>Assignee</th>
+                <th style="width: 190px;">SLA Health</th>
+                <th style="width: 100px;" class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody id="tickets-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- VIEW 3: SLA DYNAMIC CONFIGURATION -->
+    <!-- ============================================================== -->
+    <div id="view-sla-config" style="display:none;">
+      <div class="row g-4">
+        <div class="col-md-8">
+          <div class="card border-0 shadow-sm p-4">
+            <h5 class="fw-bold mb-2"><i class="fa-solid fa-sliders text-primary me-2"></i>Runtime SLA Targets Configuration</h5>
+            <p class="text-muted small mb-4">
+              Modify SLA resolution target hours per priority level. Changes take effect dynamically without restarting the server or changing application code.
+            </p>
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Priority Tier</th>
+                    <th>Resolution Target</th>
+                    <th>Response Target</th>
+                    <th>Status</th>
+                    <th class="text-end">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="sla-config-tbody">
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="card border-0 shadow-sm p-4 bg-light">
+            <h6 class="fw-bold mb-3"><i class="fa-solid fa-circle-info text-primary me-2"></i>SLA Business Logic</h6>
+            <div class="small text-muted d-flex flex-column gap-3">
+              <div>
+                <strong>1. Clock Start:</strong> SLA clock starts immediately at ticket creation (<code>created_at</code>).
+              </div>
+              <div>
+                <strong>2. On-Hold Pausing:</strong> Placing a request into <code>ON_HOLD</code> pauses SLA countdown. Paused time is dynamically added to <code>total_on_hold_seconds</code>, extending the due date.
+              </div>
+              <div>
+                <strong>3. Priority Shifts:</strong> Changing priority recalculates the SLA target and adjusts the due date.
+              </div>
+              <div>
+                <strong>4. Warning & Breach:</strong> Tickets reaching &ge;75% duration enter <code>APPROACHING_BREACH</code>. Past 100% they are flagged as <code>SLA_BREACHED</code>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: RAISE NEW SERVICE REQUEST -->
+  <!-- ============================================================== -->
+  <div class="custom-modal" id="modal-create-request">
+    <div class="custom-modal-dialog">
+      <div class="modal-head">
+        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-plus-circle text-primary me-2"></i>Raise IT Service Request</h5>
+        <button type="button" class="btn-close" onclick="closeModal('modal-create-request')"></button>
+      </div>
+      <form id="form-create-request" onsubmit="submitCreateRequest(event)">
+        <div class="modal-body-content">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">REQUESTER (EMPLOYEE) *</label>
+            <select id="create-requester" class="form-select" required></select>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small text-muted">CATEGORY *</label>
+              <select id="create-category" class="form-select" required></select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small text-muted">PRIORITY *</label>
+              <select id="create-priority" class="form-select" required>
+                <option value="LOW">Low (48 hours SLA)</option>
+                <option value="MEDIUM" selected>Medium (24 hours SLA)</option>
+                <option value="HIGH">High (8 hours SLA)</option>
+                <option value="CRITICAL">Critical (4 hours SLA)</option>
+              </select>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">SUBJECT / TITLE *</label>
+            <input type="text" id="create-subject" class="form-control" placeholder="Brief summary (e.g. VPN connection failure)" required minlength="3" maxlength="200">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">DETAILED DESCRIPTION *</label>
+            <textarea id="create-description" class="form-control" rows="4" placeholder="Detailed explanation of the issue, error messages, and steps taken..." required minlength="5"></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-light" onclick="closeModal('modal-create-request')">Cancel</button>
+          <button type="submit" class="btn btn-primary"><i class="fa-solid fa-paper-plane me-1"></i> Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: TICKET DETAILS & WORKFLOW -->
+  <!-- ============================================================== -->
+  <div class="custom-modal" id="modal-ticket-details">
+    <div class="custom-modal-dialog modal-xl">
+      <div class="modal-head">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="badge bg-dark font-monospace fs-6" id="detail-ticket-number">SR-2026-0000</span>
+          <span id="detail-priority-badge" class="badge">PRIORITY</span>
+          <span id="detail-status-badge" class="badge">STATUS</span>
+          <span id="detail-sla-badge" class="badge">SLA STATUS</span>
+        </div>
+        <button type="button" class="btn-close" onclick="closeModal('modal-ticket-details')"></button>
+      </div>
+      <div class="modal-body-content">
+        <div class="row g-4">
+          <!-- Left Column: Details & Operations -->
+          <div class="col-md-7 border-end pe-md-4">
+            <h4 class="fw-bold mb-2" id="detail-subject">Ticket Subject</h4>
+            <div class="text-muted small mb-3 pb-2 border-bottom d-flex flex-wrap gap-3">
+              <span><i class="fa-solid fa-folder text-muted me-1"></i> <strong id="detail-category">Hardware</strong></span>
+              <span><i class="fa-solid fa-user text-muted me-1"></i> <strong id="detail-requester">Name</strong></span>
+              <span><i class="fa-solid fa-calendar text-muted me-1"></i> <span id="detail-created">Date</span></span>
+            </div>
+            
+            <div class="p-3 bg-light rounded mb-3">
+              <div class="fw-bold text-muted small mb-1">DESCRIPTION</div>
+              <div id="detail-description" style="white-space: pre-wrap; font-size:0.95rem;">Description text</div>
+            </div>
+
+            <!-- Resolution Details Box (Visible when resolved/closed) -->
+            <div id="detail-resolution-box" class="p-3 bg-success-subtle border border-success rounded mb-3" style="display:none;">
+              <div class="fw-bold text-success small mb-1"><i class="fa-solid fa-circle-check me-1"></i> RESOLUTION RECORD</div>
+              <p id="detail-resolution-text" class="mb-1 text-dark" style="white-space: pre-wrap;"></p>
+              <div class="small text-muted" id="detail-resolved-by">Resolved by: Alex Chen</div>
+            </div>
+
+            <!-- SLA Clock & Progress Card -->
+            <div class="card border p-3 mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="small fw-bold text-muted">SLA RESOLUTION PROGRESS</span>
+                <span class="small fw-bold" id="detail-sla-countdown">Remaining: 2h 15m</span>
+              </div>
+              <div class="progress-sla">
+                <div id="detail-sla-progress-bar" class="progress-sla-fill bg-success" style="width: 50%;"></div>
+              </div>
+              <div class="d-flex justify-content-between text-muted small mt-2">
+                <span>Target: <strong id="detail-sla-target">4.0h</strong></span>
+                <span>Due: <strong id="detail-sla-due">Date</strong></span>
+                <span>Paused: <strong id="detail-on-hold-time">0m</strong></span>
+              </div>
+            </div>
+
+            <!-- Workflow Operations -->
+            <div class="card border-0 bg-light p-3">
+              <div class="fw-bold small text-muted mb-2">WORKFLOW OPERATIONS</div>
+              <div class="d-flex flex-wrap gap-2" id="detail-action-buttons">
+                <!-- Action buttons rendered via JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Comments & Audit History -->
+          <div class="col-md-5">
+            <div class="d-flex border-bottom mb-3">
+              <button class="btn btn-sm btn-link text-decoration-none fw-bold text-dark border-bottom border-primary border-2 pb-2" id="btn-tab-comments" onclick="switchDetailTab('comments')">
+                <i class="fa-solid fa-comments me-1"></i> Comments (<span id="comment-count">0</span>)
+              </button>
+              <button class="btn btn-sm btn-link text-decoration-none text-muted pb-2" id="btn-tab-history" onclick="switchDetailTab('history')">
+                <i class="fa-solid fa-clock-rotate-left me-1"></i> Audit Trail
+              </button>
+            </div>
+
+            <!-- Comments Panel -->
+            <div id="panel-comments">
+              <div id="comments-container" style="max-height: 320px; overflow-y: auto;" class="pe-1 mb-3"></div>
+              <form id="form-add-comment" onsubmit="submitComment(event)">
+                <div class="d-flex gap-2 mb-2">
+                  <select id="comment-author" class="form-select form-select-sm" required style="max-width: 170px;"></select>
+                  <div class="form-check d-flex align-items-center mb-0">
+                    <input class="form-check-input me-1" type="checkbox" id="comment-internal">
+                    <label class="form-check-label small text-muted" for="comment-internal">Internal</label>
+                  </div>
+                </div>
+                <div class="input-group input-group-sm">
+                  <input type="text" id="comment-text" class="form-control" placeholder="Type a work note or update..." required>
+                  <button class="btn btn-primary" type="submit"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Audit History Panel -->
+            <div id="panel-history" style="display:none;">
+              <div id="history-container" class="audit-timeline" style="max-height: 420px; overflow-y: auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTION MODAL: ASSIGN -->
+  <div class="custom-modal" id="modal-assign">
+    <div class="custom-modal-dialog">
+      <div class="modal-head">
+        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-user-plus text-primary me-2"></i>Assign Request</h5>
+        <button type="button" class="btn-close" onclick="closeModal('modal-assign')"></button>
+      </div>
+      <form id="form-assign" onsubmit="submitAssign(event)">
+        <div class="modal-body-content">
+          <input type="hidden" id="assign-request-id">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">SELECT IT TEAM MEMBER *</label>
+            <select id="assign-user-id" class="form-select" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">ASSIGNMENT REMARKS</label>
+            <input type="text" id="assign-remarks" class="form-control" placeholder="e.g. Assigned to senior hardware specialist">
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-light" onclick="closeModal('modal-assign')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Assign Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACTION MODAL: STATUS TRANSITION -->
+  <div class="custom-modal" id="modal-status">
+    <div class="custom-modal-dialog">
+      <div class="modal-head">
+        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-arrows-spin text-primary me-2"></i>Update Status</h5>
+        <button type="button" class="btn-close" onclick="closeModal('modal-status')"></button>
+      </div>
+      <form id="form-status" onsubmit="submitStatusUpdate(event)">
+        <div class="modal-body-content">
+          <input type="hidden" id="status-request-id">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">TARGET STATUS *</label>
+            <select id="status-new-value" class="form-select" required></select>
+            <small class="text-muted" id="status-transition-hint"></small>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">REMARKS / REASON</label>
+            <input type="text" id="status-remarks" class="form-control" placeholder="e.g. Waiting for user response regarding laptop serial">
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-light" onclick="closeModal('modal-status')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Update Status</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACTION MODAL: RESOLVE -->
+  <div class="custom-modal" id="modal-resolve">
+    <div class="custom-modal-dialog">
+      <div class="modal-head bg-success text-white">
+        <h5 class="mb-0 fw-bold text-white"><i class="fa-solid fa-circle-check me-2"></i>Resolve Service Request</h5>
+        <button type="button" class="btn-close btn-close-white" onclick="closeModal('modal-resolve')"></button>
+      </div>
+      <form id="form-resolve" onsubmit="submitResolve(event)">
+        <div class="modal-body-content">
+          <input type="hidden" id="resolve-request-id">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">RESOLVER (IT STAFF) *</label>
+            <select id="resolve-user-id" class="form-select" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">RESOLUTION DETAILS *</label>
+            <textarea id="resolve-details" class="form-control" rows="4" placeholder="Mandatory explanation of the fix, root cause, or resolution steps..." required minlength="5"></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-light" onclick="closeModal('modal-resolve')">Cancel</button>
+          <button type="submit" class="btn btn-success">Confirm Resolution</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACTION MODAL: CLOSE -->
+  <div class="custom-modal" id="modal-close">
+    <div class="custom-modal-dialog">
+      <div class="modal-head bg-dark text-white">
+        <h5 class="mb-0 fw-bold text-white"><i class="fa-solid fa-lock me-2"></i>Close Service Request</h5>
+        <button type="button" class="btn-close btn-close-white" onclick="closeModal('modal-close')"></button>
+      </div>
+      <form id="form-close" onsubmit="submitClose(event)">
+        <div class="modal-body-content">
+          <input type="hidden" id="close-request-id">
+          <p class="text-muted small mb-3">Closing officially archives this ticket. Closed requests cannot be modified without being formally reopened.</p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">CLOSING REMARKS</label>
+            <input type="text" id="close-remarks" class="form-control" placeholder="e.g. Requester confirmed resolution works fine">
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-light" onclick="closeModal('modal-close')">Cancel</button>
+          <button type="submit" class="btn btn-dark">Close Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ACTION MODAL: REOPEN -->
+  <div class="custom-modal" id="modal-reopen">
+    <div class="custom-modal-dialog">
+      <div class="modal-head bg-warning">
+        <h5 class="mb-0 fw-bold"><i class="fa-solid fa-rotate-left me-2"></i>Reopen Service Request</h5>
+        <button type="button" class="btn-close" onclick="closeModal('modal-reopen')"></button>
+      </div>
+      <form id="form-reopen" onsubmit="submitReopen(event)">
+        <div class="modal-body-content">
+          <input type="hidden" id="reopen-request-id">
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">REOPENED BY *</label>
+            <select id="reopen-actor-id" class="form-select" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small text-muted">REASON FOR REOPENING *</label>
+            <textarea id="reopen-reason" class="form-control" rows="3" placeholder="Explain why the ticket is being reopened..." required minlength="5"></textarea>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="btn btn-light" onclick="closeModal('modal-reopen')">Cancel</button>
+          <button type="submit" class="btn btn-warning">Reopen Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-box" id="toast-container"></div>
+
+  <!-- Application JavaScript -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
